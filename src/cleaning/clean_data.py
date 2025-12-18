@@ -1,68 +1,50 @@
-# Data cleaning functions
-"""
-Data Ingestion Module
----------------------
-This module loads raw CSV files from the Olist dataset and returns
-clean Pandas DataFrames for further processing.
-"""
 
-import os
 import pandas as pd
 
-
-def load_csv(file_path: str) -> pd.DataFrame:
+def clean_olist_data(data_dict):
     """
-    Loads a CSV file into a Pandas DataFrame.
-
-    Parameters
-    ----------
-    file_path : str
-        Path to the CSV file.
-
-    Returns
-    -------
-    pd.DataFrame
-        Loaded data.
+    Cleans and merges Olist datasets into a single dataframe.
+    Expects a dictionary of raw dataframes loaded by ingestion.
     """
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
 
-    df = pd.read_csv(file_path)
-    print(f"Loaded file: {file_path} | Shape: {df.shape}")
+    # Extract tables
+    customers = data_dict["customers"]
+    orders = data_dict["orders"]
+    order_items = data_dict["order_items"]
+    products = data_dict["products"]
+    sellers = data_dict["sellers"]
+    payments = data_dict["payments"]
+    reviews = data_dict["reviews"]
+
+    # Convert timestamps to datetime
+    timestamp_cols = [
+        "order_purchase_timestamp",
+        "order_approved_at",
+        "order_delivered_carrier_date",
+        "order_delivered_customer_date",
+        "order_estimated_delivery_date"
+    ]
+
+    for col in timestamp_cols:
+        if col in orders.columns:
+            orders[col] = pd.to_datetime(orders[col], errors="coerce")
+
+    # Basic cleaning
+    customers = customers.drop_duplicates()
+    orders = orders.drop_duplicates()
+    order_items = order_items.drop_duplicates()
+    products = products.drop_duplicates()
+    sellers = sellers.drop_duplicates()
+    payments = payments.drop_duplicates()
+    reviews = reviews.drop_duplicates()
+
+    # Merge tables
+    df = orders.merge(customers, on="customer_id", how="left")
+    df = df.merge(order_items, on="order_id", how="left")
+    df = df.merge(products, on="product_id", how="left")
+    df = df.merge(sellers, on="seller_id", how="left")
+    df = df.merge(payments, on="order_id", how="left")
+    df = df.merge(reviews, on="order_id", how="left")
+
+    print("Cleaning and merging completed.")
     return df
-
-
-def load_olist_dataset(raw_data_dir: str) -> dict:
-    """
-    Loads all Olist dataset CSVs into a dictionary of DataFrames.
-
-    Parameters
-    ----------
-    raw_data_dir : str
-        Directory containing raw Olist CSV files.
-
-    Returns
-    -------
-    dict
-        Dictionary of DataFrames keyed by table name.
-    """
-
-    files = {
-        "orders": "olist_orders_dataset.csv",
-        "order_items": "olist_order_items_dataset.csv",
-        "products": "olist_products_dataset.csv",
-        "customers": "olist_customers_dataset.csv",
-        "sellers": "olist_sellers_dataset.csv",
-        "payments": "olist_order_payments_dataset.csv",
-        "reviews": "olist_order_reviews_dataset.csv",
-        "geolocation": "olist_geolocation_dataset.csv"
-    }
-
-    dataset = {}
-
-    for key, filename in files.items():
-        path = os.path.join(raw_data_dir, filename)
-        dataset[key] = load_csv(path)
-
-    print("\nAll Olist tables loaded successfully.")
-    return dataset

@@ -1,84 +1,139 @@
-# Modeling functions
 """
 Prophet Modeling Module
 -----------------------
-This module trains a Prophet forecasting model on daily sales data,
-generates forecasts, and evaluates model performance.
+This module prepares data for Prophet, trains the model,
+generates forecasts, and evaluates performance.
 """
 
 import pandas as pd
 from prophet import Prophet
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-import numpy as np
 
+
+# ---------------------------------------------------------
+# 1. Prepare data for Prophet
+# ---------------------------------------------------------
 
 def prepare_prophet_data(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Prophet requires columns: ds (date) and y (target).
+    Prepares data for Prophet using the feature-engineered dataframe.
+    Expects columns: ds (datetime), y (target).
     """
-    prophet_df = df.rename(columns={"order_date": "ds", "daily_sales": "y"})
-    prophet_df = prophet_df[["ds", "y"]].dropna()
-    return prophet_df
 
+    df = df.copy()
 
-def train_test_split(df: pd.DataFrame, test_days: int = 60):
+    if "ds" not in df.columns:
+        raise KeyError("Feature engineering did not produce 'ds'. Check feature_engineering.py.")
+
+    if "y" not in df.columns:
+        raise KeyError("Feature engineering did not produce 'y'. Check feature_engineering.py.")
+
+    df["ds"] = pd.to_datetime(df["ds"], errors="coerce")
+    df["y"] = pd.to_numeric(df["y"], errors="coerce")
+
+    return df[["ds", "y"]]
+
+# ---------------------------------------------------------
+# 2. Train/Test Split
+# ---------------------------------------------------------
+def train_test_split_prophet(df: pd.DataFrame, test_days: int = 30):
     """
-    Splits the dataset into train and test sets.
+    Splits Prophet dataframe into train and test sets.
     """
+    df = df.sort_values("ds")
+
     train = df.iloc[:-test_days]
     test = df.iloc[-test_days:]
+
     return train, test
 
 
+# ---------------------------------------------------------
+# 3. Train Prophet Model
+# ---------------------------------------------------------
 def train_prophet_model(train_df: pd.DataFrame) -> Prophet:
     """
-    Trains a Prophet model.
+    Trains a Prophet model on the training dataframe.
     """
     model = Prophet(
         yearly_seasonality=True,
         weekly_seasonality=True,
-        daily_seasonality=False,
-        seasonality_mode="additive"
+        daily_seasonality=False
     )
+
     model.fit(train_df)
     return model
 
 
-def forecast_sales(model: Prophet, periods: int = 60) -> pd.DataFrame:
+# ---------------------------------------------------------
+# 4. Forecast Future Values
+# ---------------------------------------------------------
+def generate_forecast(model: Prophet, periods: int = 30) -> pd.DataFrame:
     """
-    Generates future predictions.
+    Generates a forecast for the next `periods` days.
     """
     future = model.make_future_dataframe(periods=periods)
     forecast = model.predict(future)
     return forecast
 
 
-def evaluate_forecast(test_df: pd.DataFrame, forecast_df: pd.DataFrame) -> dict:
+# ---------------------------------------------------------
+# 5. Evaluate Forecast
+# ---------------------------------------------------------
+def evaluate_forecast(test_df: pd.DataFrame, forecast_df: pd.DataFrame):
     """
-    Computes MAE, RMSE, and MAPE.
+    Merges test data with forecast and computes MAE and RMSE.
     """
-    merged = test_df.merge(forecast_df[["ds", "yhat"]], on="ds", how="left")
 
-    mae = mean_absolute_error(merged["y"], merged["yhat"])
-    rmse = np.sqrt(mean_squared_error(merged["y"], merged["yhat"]))
-    mape = np.mean(np.abs((merged["y"] - merged["yhat"]) / merged["y"])) * 100
+    # Ensure datetime alignment
+    test_df["ds"] = pd.to_datetime(test_df["ds"])
+    forecast_df["ds"] = pd.to_datetime(forecast_df["ds"])
 
-    return {"MAE": mae, "RMSE": rmse, "MAPE": mape}
+    # Merge on ds
+    merged = test_df.merge(
+        forecast_df[["ds", "yhat"]],
+        on="ds",
+        how="left"
+    )
+
+    merged["error"] = merged["y"] - merged["yhat"]
+
+    mae = merged["error"].abs().mean()
+    rmse = (merged["error"] ** 2).mean() ** 0.5
+
+    return {"mae": mae, "rmse": rmse}
 
 
-def run_prophet_pipeline(df: pd.DataFrame, test_days: int = 60):
+# ---------------------------------------------------------
+# 6. Full Pipeline Wrapper
+# ---------------------------------------------------------
+def run_prophet_pipeline(df_features: pd.DataFrame):
     """
-    Full modeling pipeline.
+    Full end‑to‑end Prophet pipeline:
+    - Prepare data
+    - Train/test split
+    - Train model
+    - Forecast
+    - Evaluate
     """
-    prophet_df = prepare_prophet_data(df)
-    train_df, test_df = train_test_split(prophet_df, test_days)
 
+    print("Preparing data for Prophet...")
+    prophet_df = prepare_prophet_data(df_features)
+
+    print("Splitting train/test...")
+    train_df, test_df = train_test_split_prophet(prophet_df)
+
+    print("Training Prophet model...")
     model = train_prophet_model(train_df)
-    forecast_df = forecast_sales(model, periods=test_days)
 
+    print("Generating forecast...")
+    forecast_df = generate_forecast(model)
+
+    print("Evaluating forecast...")
     metrics = evaluate_forecast(test_df, forecast_df)
 
     print("Forecasting complete.")
-    print("Evaluation metrics:", metrics)
+    print(f"MAE: {metrics['mae']:.2f}, RMSE: {metrics['rmse']:.2f}")
 
     return forecast_df, metrics
+
+

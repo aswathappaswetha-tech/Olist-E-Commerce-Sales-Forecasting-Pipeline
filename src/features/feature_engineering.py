@@ -23,31 +23,45 @@ def add_time_features(df: pd.DataFrame, date_col: str = "order_purchase_timestam
     return df
 
 
-def aggregate_daily_sales(df: pd.DataFrame) -> pd.DataFrame:
+def aggregate_daily_revenue(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Aggregates order items into daily sales totals.
+    Aggregates total daily revenue from order items.
     """
+
+    df = df.copy()
+
     daily = (
-        df.groupby("order_date")
-        .agg(
-            daily_sales=("price", "sum"),
-            daily_orders=("order_id", "nunique"),
-            avg_order_value=("price", "mean"),
-        )
+        df.groupby("order_date")["price"]
+        .sum()
         .reset_index()
     )
+
+    # Rename to Prophet format
+    daily.rename(columns={"order_date": "ds", "price": "y"}, inplace=True)
+
+    # Ensure correct types
+    daily["ds"] = pd.to_datetime(daily["ds"])
+    daily["y"] = pd.to_numeric(daily["y"])
+
     return daily
 
 
-def add_lag_features(df: pd.DataFrame, target_col: str = "daily_sales") -> pd.DataFrame:
+def add_lag_features(df: pd.DataFrame, target_col: str = "y") -> pd.DataFrame:
     """
-    Adds lag features for forecasting.
+    Adds lag features for time series modeling.
+    Expects the target column to be 'y'.
     """
+
+    df = df.copy()
+
+    if target_col not in df.columns:
+        raise KeyError(f"Target column '{target_col}' not found. Available columns: {df.columns.tolist()}")
+
     df["lag_1"] = df[target_col].shift(1)
     df["lag_7"] = df[target_col].shift(7)
     df["lag_30"] = df[target_col].shift(30)
-    return df
 
+    return df
 
 def add_rolling_features(df: pd.DataFrame, target_col: str = "daily_sales") -> pd.DataFrame:
     """
@@ -91,21 +105,9 @@ def add_product_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.merge(product_stats, on="product_id", how="left")
     return df
 
-
-def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Full feature engineering pipeline.
-    """
-    df = add_time_features(df)
-    df = add_customer_features(df)
-    df = add_product_features(df)
-
-    # Aggregate to daily level
-    daily = aggregate_daily_sales(df)
-
-    # Add lag + rolling features
-    daily = add_lag_features(daily)
-    daily = add_rolling_features(daily)
-
-    print("Feature engineering complete. Final shape:", daily.shape)
+def build_features(df_clean: pd.DataFrame) -> pd.DataFrame:
+    df = add_time_features(df_clean)
+    daily = aggregate_daily_revenue(df)
+    daily = add_lag_features(daily, target_col="y")
+    print(f"Feature engineering complete. Final shape: {daily.shape}")
     return daily
