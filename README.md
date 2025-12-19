@@ -76,7 +76,7 @@ The dashboard visualizes:
 - Seasonality patterns
 - Category-level insights
 - Interactive filters
-👉 Dashboard Link: (Tableau Public link here)
+👉 Dashboard Link: https://public.tableau.com/app/profile/swetha.aswathappa/viz/e-commercesales_17661113112960/Salescustomerandpaymentinsights?publish=yes
 👉 Screenshots: <img width="1487" height="822" alt="image" src="https://github.com/user-attachments/assets/ad351136-c418-457f-9746-67d01012a51a" />
 
 
