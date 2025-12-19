@@ -77,7 +77,9 @@ The dashboard visualizes:
 - Category-level insights
 - Interactive filters
 👉 Dashboard Link: (Tableau Public link here)
-👉 Screenshots: (Add images )
+👉 Screenshots: <img width="1487" height="822" alt="image" src="https://github.com/user-attachments/assets/ad351136-c418-457f-9746-67d01012a51a" />
+
+
 
 🛠 Tech Stack
 - Python
